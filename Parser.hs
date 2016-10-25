@@ -50,8 +50,8 @@ opTable = [
     [ infixOp "||" (BinApp OR_) Ex.AssocLeft]
   ]
 
-------------------------------------------------------------------------------
-------------------------------EXPRESSION PARSERS------------------------------
+-------------------------------------------------------------------------
+----------------------------EXPRESSION PARSERS---------------------------
 
 intSign_P :: Parser (Int -> Int)
 intSign_P =
@@ -104,13 +104,12 @@ pairLiteral_P = do
 ident_P :: Parser Expr
 ident_P = do
   s <- identifier
-  return (IdentCon s)
+  return (Ident s)
 
-arrayelem_exprP :: Parser Expr
-arrayelem_exprP = do
-  i <- identifier
-  es <- many1 (between (symbol "[") (symbol "]") expr_P)
-  return (ArrayElemCon (ArrayElem i es))
+arrayelemexpr_P :: Parser Expr
+arrayelemexpr_P = do
+  arrelem <- arrayelem_P
+  return (ArrayElemExpr arrelem)
 
 arrayelem_P :: Parser ArrayElem
 arrayelem_P = do
@@ -134,40 +133,21 @@ expr_factor_P = try intLiteral_P
   <|> try charLiteral_P
   <|> try stringLiteral_P
   <|> try pairLiteral_P
-  <|> try arrayelem_exprP
   <|> try ident_P
+  <|> try arrayelemexpr_P
   <|> parens expr_P
 
 ------------------------------------------------------------------------------
 -------------------------------STATEMENT PARSERS------------------------------
 
-program_P :: Parser Program
-program_P = do
-  reserved "begin"
-  fs <- many function_P
-  st <- stat_P
-  reserved "end"
-  return (Program fs st)
-
-function_P :: Parser Function
-function_P = do
-  t <- type_P
-  i <- identifier
-  params <- parens (commaSep param_P)
-  reserved "is"
-  st <- stat_P
-  reserved "end"
-  return (Function t i params st)
-
-param_P :: Parser Param
-param_P = do
-  t <- type_P
-  i <- identifier
-  return (Param t i)
-
+-- In 'try statTopLevel_P', lazy evaluation should
+-- ensure that we do not get excessively deep trees (i.e: call stacks):
+-- since each monadic 'run' operation (i.e: each statement 'a <- xa' in
+-- a 'do' block) is atomic, there should only be one of the other
+-- parsers below running in memory at any given time.
 stat_P :: Parser Stat
 stat_P = try skip_P
-  <|> try vardecl_P
+  <|> try vardef_P
   <|> try varref_P
   <|> try readStat_P
   <|> try readStat_P
@@ -180,84 +160,92 @@ stat_P = try skip_P
   <|> try whileStat_P
   <|> beginEndStat_P
 
+-- TODO: Figure out how to parse recursive statements according to
+-- grammar in spec.
+-- Or perhaps we can specify a program as containing a list of statements
+-- rather than one statement and after creating the AST, we can use a
+-- fold to combine them into a single statement?
+statTopLevel_P :: Parser [Stat]
+statTopLevel_P = sepBy1 stat_P (lexeme (char ';'))
+
 skip_P :: Parser Stat
 skip_P = reserved "skip" >> return Skip
 
-vardecl_P :: Parser Stat
-vardecl_P = do
-  t <- type_P
+vardef_P :: Parser Stat
+vardef_P = do
+  t <- lexeme type_P
   i <- identifier
   reserved "="
-  rhs <- assignRHS_P
-  return (VarDecl t i rhs)
+  rhs <- lexeme assignRHS_P
+  return (VarDef t i rhs)
 
 varref_P :: Parser Stat
 varref_P = do
-  lhs <- assignLHS_P
+  lhs <- lexeme assignLHS_P
   reserved "="
-  rhs <- assignRHS_P
+  rhs <- lexeme assignRHS_P
   return (VarRef lhs rhs)
 
 readStat_P :: Parser Stat
 readStat_P = do
   reserved "read"
-  lhs <- assignLHS_P
+  lhs <- lexeme assignLHS_P
   return (ReadStat lhs)
 
 freeStat_P :: Parser Stat
 freeStat_P = do
   reserved "free"
-  e <- expr_P
+  e <- lexeme expr_P
   return (FreeStat e)
 
 returnStat_P :: Parser Stat
 returnStat_P = do
   reserved "return"
-  e <- expr_P
+  e <- lexeme expr_P
   return (Return e)
 
 exitStat_P :: Parser Stat
 exitStat_P = do
   reserved "exit"
-  e <- expr_P
+  e <- lexeme expr_P
   return (Exit e)
 
 printStat_P :: Parser Stat
 printStat_P = do
   reserved "print"
-  e <- expr_P
+  e <- lexeme expr_P
   return (Print e)
 
 printlnStat_P :: Parser Stat
 printlnStat_P = do
   reserved "println"
-  e <- expr_P
+  e <- lexeme expr_P
   return (PrintLn e)
 
 ifStat_P :: Parser Stat
 ifStat_P = do
   reserved "if"
-  cond <- expr_P
+  cond <- lexeme expr_P
   reserved "then"
-  st1 <- stat_P
+  st1 <- lexeme stat_P
   reserved "else"
-  st2 <- stat_P
+  st2 <- lexeme stat_P
   reserved "fi"
   return (If cond st1 st2)
 
 whileStat_P :: Parser Stat
 whileStat_P = do
   reserved "while"
-  e <- expr_P
+  e <- lexeme expr_P
   reserved "do"
-  st <- stat_P
+  st <- lexeme stat_P
   reserved "done"
   return (While e st)
 
 beginEndStat_P :: Parser Stat
 beginEndStat_P = do
   reserved "begin"
-  st <- stat_P
+  st <- lexeme stat_P
   reserved "end"
   return (BeginEnd st)
 
@@ -294,7 +282,7 @@ assignRHS_P = try (expr_P >>= return . AssignRExpr)
 pairelem_P :: Parser PairElem
 pairelem_P
   = try (do {(reserved "fst"); e <- expr_P; return (Fst e)})
-  <|> try (do {(reserved "snd"); e <- expr_P; return (Snd e)})
+  <|> (do {(reserved "snd"); e <- expr_P; return (Snd e)})
 
 ------------------------------------------------------------------------------
 -------------------------------TYPE PARSERS-----------------------------------
@@ -302,10 +290,7 @@ pairelem_P
 type_P :: Parser Type
 type_P = try tyArr_P
   <|> tyPair_P
-  <|> tyInt_P
-  <|> tyBool_P
-  <|> tyChar_P
-  <|> tyString_P
+  <|> util_baseType_P
 
 tyInt_P :: Parser Type
 tyInt_P = do
@@ -329,10 +314,7 @@ tyString_P = do
 
 tyArr_P :: Parser Type
 tyArr_P = do
-  t <- (tyInt_P
-       <|> tyBool_P
-       <|> tyChar_P
-       <|> tyString_P)
+  t <- util_baseType_P
   syms <- many1 (symbol "[]")
   let n = length syms
   -- This is used in order to handle multi-dimensional arrays
@@ -345,13 +327,55 @@ tyPair_P = do
   (t1, t2) <- parens internalPair_P
   return (tyPair t1 t2)
   where
+    -- Used to parse the internals of the pair
     internalPair_P = do
-      t1 <- tyInt_P -- TODO: figure out for general types
-      char ','
-      t2 <- tyInt_P -- TODO: figure out for general types
+      t1 <- lexeme pairelemtype_P
+      lexeme (char ',')
+      t2 <- lexeme pairelemtype_P
       return (t1, t2)
+      where
+        pairelemtype_P =
+          (try tyArr_P)         <|>
+          (try util_baseType_P) <|>
+          (try (reserved tyNamePair >> return (TCon tyNamePair)))
 
+-- We have a special utility function for parsing base types
+-- Since base types are "non-recursive" types, i.e: types of kind '*',
+-- all types are built from base types with various type constructors.
+-- This function abstracts away the need to call long base type parsers
+-- in higher-kinded types.
+util_baseType_P :: Parser Type
+util_baseType_P
+   =  tyInt_P
+  <|> tyBool_P
+  <|> tyChar_P
+  <|> tyString_P
 -------------------------------------------------------------------------------
+-----------------TOP LEVEL PARSERS AND THEIR UTILITY PARSERS-------------
+
+program_P :: Parser Program
+program_P = do
+  reserved "begin"
+  fs <- lexeme (try (many function_P))
+  st <- lexeme stat_P
+  reserved "end"
+  return (Program fs st)
+
+function_P :: Parser Function
+function_P = do
+  t <- type_P
+  i <- identifier
+  params <- parens (commaSep param_P)
+  reserved "is"
+  st <- stat_P
+  reserved "end"
+  return (Function t i params st)
+
+param_P :: Parser Param
+param_P = do
+  t <- type_P
+  i <- identifier
+  return (Param t i)
 
 contents :: Parser a -> Parser a
 contents p = do
@@ -359,4 +383,11 @@ contents p = do
   res <- p
   eof
   return res
+
+parseTopLevelStat_P :: String -> Either ParseError [Stat]
+parseTopLevelStat_P s = parse (contents statTopLevel_P) "<stdin>" s
+
+parseTopLevelProgram_P :: String -> Either ParseError Program
+parseTopLevelProgram_P s = parse (contents program_P) "<stdin>" s
+
 ------------------------------------------------------------------

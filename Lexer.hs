@@ -61,5 +61,9 @@ commaSep1 = Tok.commaSep1 lexer
 natural :: Parser Integer
 natural = Tok.natural lexer
 
+lexeme :: Parser a -> Parser a
+lexeme = Tok.lexeme lexer
+
+-- In Parser.hs, this function should only be called once explicitly, at the start of the main parsing function, in order to skip any leading whitespace
 whiteSpace :: Parser ()
 whiteSpace = Tok.whiteSpace lexer
