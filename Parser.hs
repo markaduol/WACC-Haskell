@@ -1,6 +1,4 @@
-module Parser (
-  --parseExpr
-) where
+module Parser where
 
 import Lexer
 import Syntax
@@ -269,9 +267,9 @@ assignRHS_P = try (expr_P >>= return . AssignRExpr)
       return (AssignRNewPair e1 e2)
       where
         tupleExpr_P = do
-          a1 <- expr_P
-          char ','
-          a2 <- expr_P
+          a1 <- lexeme expr_P
+          lexeme (char ',')
+          a2 <- lexeme expr_P
           return (a1, a2)
     funcall_P = do
       reserved "call"
