@@ -17,6 +17,11 @@ processStat input = do
       deconstr st acc = acc ++ [st]
 
 -- TODO: Process top level program
+processProgram :: String -> IO ()
+processProgram input = do
+  case parseTopLevelProgram_P input of
+    Left err -> print err
+    Right prog -> return ()
 
 main :: IO ()
 main = runInputT defaultSettings loop
