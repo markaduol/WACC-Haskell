@@ -10,18 +10,23 @@ processStat input = do
   case parseTopLevelStat_P input of
     Left err   -> print err
     Right stmt -> mapM_ print (viewStmts stmt)
-    where
-      viewStmts :: Stat -> [Stat]
-      viewStmts stmt = deconstr stmt []
-      deconstr (StatTopLevel st1 st2) acc = st1:(deconstr st2 acc)
-      deconstr st acc = acc ++ [st]
+
+viewStmts :: Stat -> [Stat]
+viewStmts stmt = deconstr stmt []
+deconstr (StatTopLevel st1 st2) acc = st1:(deconstr st2 acc)
+deconstr st acc = acc ++ [st]
+
+-- TODO:
+-- View functions in a human friendly format
+hf_Functions :: [Function] -> [Function]
+hf_Functions = id
 
 -- TODO: Process top level program
 processProgram :: String -> IO ()
 processProgram input = do
   case parseTopLevelProgram_P input of
-    Left err -> print err
-    Right prog -> return ()
+    Left err              -> print err
+    Right (Program fs st) -> (mapM_  print fs) >> mapM_ print (viewStmts st)
 
 main :: IO ()
 main = runInputT defaultSettings loop
@@ -32,4 +37,4 @@ main = runInputT defaultSettings loop
       case line of
         Nothing    -> liftIO (putStrLn "Exiting interactive session...") >> return ()
         -- We use 'liftIO' to hide underlying code
-        Just input -> liftIO (processStat input) >> loop
+        Just input -> liftIO (processProgram input) >> loop

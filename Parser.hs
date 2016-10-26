@@ -230,9 +230,9 @@ ifStat_P = do
   reserved "if"
   cond <- lexeme expr_P
   reserved "then"
-  st1 <- lexeme stat_P
+  st1 <- lexeme statTopLevel_P
   reserved "else"
-  st2 <- lexeme stat_P
+  st2 <- lexeme statTopLevel_P
   reserved "fi"
   return (If cond st1 st2)
 
@@ -241,26 +241,28 @@ whileStat_P = do
   reserved "while"
   e <- lexeme expr_P
   reserved "do"
-  st <- lexeme stat_P
+  st <- lexeme statTopLevel_P
   reserved "done"
   return (While e st)
 
 beginEndStat_P :: Parser Stat
 beginEndStat_P = do
   reserved "begin"
-  st <- lexeme stat_P
+  st <- lexeme statTopLevel_P
   reserved "end"
   return (BeginEnd st)
 
 ------------------------------------------------------------------------------
 
 assignLHS_P :: Parser AssignL
-assignLHS_P = try (identifier >>= return . AssignLIdent)
+assignLHS_P
+   =  try (identifier >>= return . AssignLIdent)
   <|> try (arrayelem_P >>= return . AssignLArrayElem)
   <|> (pairelem_P >>= return . AssignLPairElem)
 
 assignRHS_P :: Parser AssignR
-assignRHS_P = try (expr_P >>= return . AssignRExpr)
+assignRHS_P
+   =  try (expr_P >>= return . AssignRExpr)
   <|> try (brackets (commaSep expr_P) >>= return . AssignRLitArray)
   <|> try newpair_P
   <|> try (pairelem_P >>= return . AssignRPairElem)
@@ -353,7 +355,7 @@ util_baseType_P
   <|> tyBool_P
   <|> tyChar_P
   <|> tyString_P
--------------------------------------------------------------------------------
+--------------------------------------------------------input-----------------------
 -----------------TOP LEVEL PARSERS AND THEIR UTILITY PARSERS-------------
 
 program_P :: Parser Program
@@ -370,7 +372,7 @@ function_P = do
   i <- identifier
   params <- parens (commaSep param_P)
   reserved "is"
-  st <- lexeme stat_P
+  st <- lexeme statTopLevel_P
   reserved "end"
   return (Function t i params st)
 
