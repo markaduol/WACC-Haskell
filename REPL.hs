@@ -1,14 +1,22 @@
 module REPL where
 
 import Parser
+import Syntax
 import System.Console.Haskeline
 import Control.Monad.Trans
 
 processStat :: String -> IO ()
 processStat input = do
   case parseTopLevelStat_P input of
-    Left err    -> print err
-    Right stmts -> mapM_ print stmts
+    Left err   -> print err
+    Right stmt -> mapM_ print (viewStmts stmt)
+    where
+      viewStmts :: Stat -> [Stat]
+      viewStmts stmt = deconstr stmt []
+      deconstr (StatTopLevel st1 st2) acc = st1:(deconstr st2 acc)
+      deconstr st acc = acc ++ [st]
+
+-- TODO: Process top level program
 
 main :: IO ()
 main = runInputT defaultSettings loop

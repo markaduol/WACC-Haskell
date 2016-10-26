@@ -138,11 +138,24 @@ expr_factor_P = try intLiteral_P
 ------------------------------------------------------------------------------
 -------------------------------STATEMENT PARSERS------------------------------
 
--- In 'try statTopLevel_P', lazy evaluation should
--- ensure that we do not get excessively deep trees (i.e: call stacks):
--- since each monadic 'run' operation (i.e: each statement 'a <- xa' in
--- a 'do' block) is atomic, there should only be one of the other
--- parsers below running in memory at any given time.
+statTopLevel_P :: Parser Stat
+statTopLevel_P = do
+  -- If sepBy1 succeeds, then we have at least one successful statement.
+  (stmt:stmts) <- sepBy1 stat_P (lexeme (char ';'))
+  -- see text document "foldl-foldl-foldl'.txt" on why we use foldl'
+  -- instead of <foldr StatTopLevel stmts>.
+  return (foldl' (flip StatTopLevel) stmt stmts)
+  where
+    -- Using excessively long chains of references to handle
+    -- deeply nested expressions would result in stack overflows. So in
+    -- order to avoid this behaviour, we use 'seq', which evaluates its
+    -- first argument to Weak Head Normal Form and then returns it second
+    -- argument. If we want to evaluate the first argument to Normal
+    -- Form (i.e: complete and utter evaluation), use
+    -- Control.DeepSeq.deepseq.
+    foldl'  f z []     = z
+    foldl'  f z (x:xs) = let z' = (z `f` x) in (seq z' (foldl' f z' xs))
+
 stat_P :: Parser Stat
 stat_P = try skip_P
   <|> try vardef_P
@@ -157,14 +170,6 @@ stat_P = try skip_P
   <|> try ifStat_P
   <|> try whileStat_P
   <|> beginEndStat_P
-
--- TODO: Figure out how to parse recursive statements according to
--- grammar in spec.
--- Or perhaps we can specify a program as containing a list of statements
--- rather than one statement and after creating the AST, we can use a
--- fold to combine them into a single statement?
-statTopLevel_P :: Parser [Stat]
-statTopLevel_P = sepBy1 stat_P (lexeme (char ';'))
 
 skip_P :: Parser Stat
 skip_P = reserved "skip" >> return Skip
@@ -355,17 +360,17 @@ program_P :: Parser Program
 program_P = do
   reserved "begin"
   fs <- lexeme (try (many function_P))
-  st <- lexeme stat_P
+  st <- lexeme statTopLevel_P
   reserved "end"
   return (Program fs st)
 
 function_P :: Parser Function
 function_P = do
-  t <- type_P
+  t <- lexeme type_P
   i <- identifier
   params <- parens (commaSep param_P)
   reserved "is"
-  st <- stat_P
+  st <- lexeme stat_P
   reserved "end"
   return (Function t i params st)
 
@@ -382,7 +387,7 @@ contents p = do
   eof
   return res
 
-parseTopLevelStat_P :: String -> Either ParseError [Stat]
+parseTopLevelStat_P :: String -> Either ParseError Stat
 parseTopLevelStat_P s = parse (contents statTopLevel_P) "<stdin>" s
 
 parseTopLevelProgram_P :: String -> Either ParseError Program
