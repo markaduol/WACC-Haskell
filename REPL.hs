@@ -16,8 +16,8 @@ processStat input = do
 viewStmt :: Stat -> [Stat]
 viewStmt stmt = deconstr stmt []
   where
-    deconstr (StatTopLevel st1 st2) acc = st1:(deconstr st2 acc)
-    deconstr st acc                     = acc ++ [st]
+    deconstr (StatTopLevel st1 st2) acc = deconstr st2 (st1:acc)
+    deconstr st acc                     = st:acc
 
 -- View functions in a human friendly format
 viewFunctions :: [Function] -> IO ()
