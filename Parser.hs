@@ -1,5 +1,7 @@
 module Parser where
 
+-- TODO: Check precedence of parsers that have choice.
+
 import Lexer
 import Syntax
 import Type
@@ -131,8 +133,8 @@ expr_factor_P = try intLiteral_P
   <|> try charLiteral_P
   <|> try stringLiteral_P
   <|> try pairLiteral_P
-  <|> try ident_P
   <|> try arrayelemexpr_P
+  <|> try ident_P
   <|> parens expr_P
 
 ------------------------------------------------------------------------------
@@ -256,9 +258,9 @@ beginEndStat_P = do
 
 assignLHS_P :: Parser AssignL
 assignLHS_P
-   =  try (identifier >>= return . AssignLIdent)
-  <|> try (arrayelem_P >>= return . AssignLArrayElem)
-  <|> (pairelem_P >>= return . AssignLPairElem)
+   =  try (arrayelem_P >>= return . AssignLArrayElem)
+  <|> try (pairelem_P >>= return . AssignLPairElem)
+  <|> (identifier >>= return . AssignLIdent)
 
 assignRHS_P :: Parser AssignR
 assignRHS_P
@@ -341,8 +343,8 @@ tyPair_P = do
       where
         pairelemtype_P =
           (try tyArr_P)         <|>
-          (try util_baseType_P) <|>
-          (try (reserved tyNamePair >> return (TCon tyNamePair)))
+          (try (reserved tyNamePair >> return (TCon tyNamePair))) <|>
+          (try util_baseType_P)
 
 -- We have a special utility function for parsing base types
 -- Since base types are "non-recursive" types, i.e: types of kind '*',
@@ -361,7 +363,7 @@ util_baseType_P
 program_P :: Parser Program
 program_P = do
   reserved "begin"
-  fs <- lexeme (try (many function_P))
+  fs <- many (lexeme (try function_P))
   st <- lexeme statTopLevel_P
   reserved "end"
   return (Program fs st)

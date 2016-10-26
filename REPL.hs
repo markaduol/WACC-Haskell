@@ -4,29 +4,44 @@ import Parser
 import Syntax
 import System.Console.Haskeline
 import Control.Monad.Trans
+import System.IO
 
 processStat :: String -> IO ()
 processStat input = do
   case parseTopLevelStat_P input of
     Left err   -> print err
-    Right stmt -> mapM_ print (viewStmts stmt)
+    Right stmt -> mapM_ print (viewStmt stmt)
 
-viewStmts :: Stat -> [Stat]
-viewStmts stmt = deconstr stmt []
-deconstr (StatTopLevel st1 st2) acc = st1:(deconstr st2 acc)
-deconstr st acc = acc ++ [st]
+-- Unfold and view the statment in a human friendly format
+viewStmt :: Stat -> [Stat]
+viewStmt stmt = deconstr stmt []
+  where
+    deconstr (StatTopLevel st1 st2) acc = st1:(deconstr st2 acc)
+    deconstr st acc                     = acc ++ [st]
 
--- TODO:
 -- View functions in a human friendly format
-hf_Functions :: [Function] -> [Function]
-hf_Functions = id
+viewFunctions :: [Function] -> IO ()
+viewFunctions []     = return ()
+viewFunctions (f:fs) = (deconstr f) >> (viewFunctions fs)
+  where
+    deconstr (Function t i ps st) = do
+      putStrLn "\n"
+      putStrLn ("Function: " ++ (show t) ++ " " ++ (show i) ++ " " ++ (show ps) ++ "\n")
+      mapM_ print (viewStmt st)
 
 -- TODO: Process top level program
 processProgram :: String -> IO ()
 processProgram input = do
   case parseTopLevelProgram_P input of
     Left err              -> print err
-    Right (Program fs st) -> (mapM_  print fs) >> mapM_ print (viewStmts st)
+    Right (Program fs st) -> viewFunctions fs >> mapM_ print (viewStmt st)
+
+readInFile :: String -> IO ()
+readInFile path = do
+  handle <- openFile path ReadMode
+  contents <- hGetContents handle
+  processProgram contents
+  hClose handle
 
 main :: IO ()
 main = runInputT defaultSettings loop
