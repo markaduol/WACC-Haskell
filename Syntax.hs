@@ -26,7 +26,7 @@ data Stat
   | If Expr Stat Stat
   | While Expr Stat
   | BeginEnd Stat
-  | StatTopLevel Stat Stat
+  | StatSeq Stat Stat
   deriving (Show)
 
 data AssignL

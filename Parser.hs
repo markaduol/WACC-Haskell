@@ -140,13 +140,16 @@ expr_factor_P = try intLiteral_P
 ------------------------------------------------------------------------------
 -------------------------------STATEMENT PARSERS------------------------------
 
-statTopLevel_P :: Parser Stat
-statTopLevel_P = do
+statSeq_P :: Parser Stat
+statSeq_P = do
   -- If sepBy1 succeeds, then we have at least one successful statement.
   (stmt:stmts) <- sepBy1 stat_P (lexeme (char ';'))
   -- see text document "foldl-foldl-foldl'.txt" on why we use foldl'
-  -- instead of <foldr StatTopLevel stmts>.
-  return (foldl' (flip StatTopLevel) stmt stmts)
+  -- instead of <foldr StatSeq stmts>.
+  -- flip StatSeq creates a right associative tree with the last statement being
+  -- 'st1' in the first 'StatSeq st1 st2'.
+  -- foldl' introduces strict evaluation.
+  return (foldl' (flip StatSeq) stmt stmts)
   where
     -- Using excessively long chains of references to handle
     -- deeply nested expressions would result in stack overflows. So in
@@ -232,9 +235,9 @@ ifStat_P = do
   reserved "if"
   cond <- lexeme expr_P
   reserved "then"
-  st1 <- lexeme statTopLevel_P
+  st1 <- lexeme statSeq_P
   reserved "else"
-  st2 <- lexeme statTopLevel_P
+  st2 <- lexeme statSeq_P
   reserved "fi"
   return (If cond st1 st2)
 
@@ -243,14 +246,14 @@ whileStat_P = do
   reserved "while"
   e <- lexeme expr_P
   reserved "do"
-  st <- lexeme statTopLevel_P
+  st <- lexeme statSeq_P
   reserved "done"
   return (While e st)
 
 beginEndStat_P :: Parser Stat
 beginEndStat_P = do
   reserved "begin"
-  st <- lexeme statTopLevel_P
+  st <- lexeme statSeq_P
   reserved "end"
   return (BeginEnd st)
 
@@ -364,7 +367,7 @@ program_P :: Parser Program
 program_P = do
   reserved "begin"
   fs <- many (lexeme (try function_P))
-  st <- lexeme statTopLevel_P
+  st <- lexeme statSeq_P
   reserved "end"
   return (Program fs st)
 
@@ -374,7 +377,7 @@ function_P = do
   i <- identifier
   params <- parens (commaSep param_P)
   reserved "is"
-  st <- lexeme statTopLevel_P
+  st <- lexeme statSeq_P
   reserved "end"
   return (Function t i params st)
 
@@ -392,7 +395,7 @@ contents p = do
   return res
 
 parseTopLevelStat_P :: String -> Either ParseError Stat
-parseTopLevelStat_P s = parse (contents statTopLevel_P) "<stdin>" s
+parseTopLevelStat_P s = parse (contents statSeq_P) "<stdin>" s
 
 parseTopLevelProgram_P :: String -> Either ParseError Program
 parseTopLevelProgram_P s = parse (contents program_P) "<stdin>" s

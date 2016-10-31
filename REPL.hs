@@ -16,8 +16,8 @@ processStat input = do
 viewStmt :: Stat -> [Stat]
 viewStmt stmt = deconstr stmt []
   where
-    deconstr (StatTopLevel st1 st2) acc = st1:(deconstr st2 acc)
-    deconstr st acc                     = acc ++ [st]
+    deconstr (StatSeq st1 st2) acc = (deconstr st2 acc) ++ [st1]
+    deconstr st acc                = acc ++ [st]
 
 -- View functions in a human friendly format
 viewFunctions :: [Function] -> IO ()
@@ -25,9 +25,9 @@ viewFunctions []     = return ()
 viewFunctions (f:fs) = (deconstr f) >> (viewFunctions fs)
   where
     deconstr (Function t i ps st) = do
-      putStrLn "\n"
       putStrLn ("Function: " ++ (show t) ++ " " ++ (show i) ++ " " ++ (show ps) ++ "\n")
       mapM_ print (viewStmt st)
+      putStrLn "\n"
 
 -- TODO: Process top level program
 processProgram :: String -> IO ()
