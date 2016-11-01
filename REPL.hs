@@ -2,6 +2,7 @@ module REPL where
 
 import Parser
 import Syntax
+import AST_Traversal
 import System.Console.Haskeline
 import Control.Monad.Trans
 import System.IO
@@ -16,8 +17,8 @@ processStat input = do
 viewStmt :: Stat -> [Stat]
 viewStmt stmt = deconstr stmt []
   where
-    deconstr (StatSeq st1 st2) acc = (deconstr st2 acc) ++ [st1]
-    deconstr st acc                = acc ++ [st]
+    deconstr (StatSeq st1 st2) acc = deconstr st2 (st1:acc)
+    deconstr st acc                = st:acc
 
 -- View functions in a human friendly format
 viewFunctions :: [Function] -> IO ()
@@ -25,8 +26,8 @@ viewFunctions []     = return ()
 viewFunctions (f:fs) = (deconstr f) >> (viewFunctions fs)
   where
     deconstr (Function t i ps st) = do
-      putStrLn ("Function: " ++ (show t) ++ " " ++ (show i) ++ " " ++ (show ps) ++ "\n")
-      mapM_ print (viewStmt st)
+      putStrLn ("FUNCTION: " ++ (show t) ++ " " ++ (show i) ++ " " ++ (show ps) ++ "\n")
+      mapM_ (\s -> print s >> putStrLn "\n") (viewStmt st)
       putStrLn "\n"
 
 -- TODO: Process top level program
@@ -34,7 +35,8 @@ processProgram :: String -> IO ()
 processProgram input = do
   case parseTopLevelProgram_P input of
     Left err              -> print err
-    Right (Program fs st) -> viewFunctions fs >> mapM_ print (viewStmt st)
+    Right (Program fs st) -> viewFunctions fs >>
+      mapM_ (\s -> print s >> putStrLn "\n") (viewStmt st)
 
 readInFile :: String -> IO ()
 readInFile path = do
