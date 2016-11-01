@@ -1,39 +1,65 @@
 module Codegen where
 
+-- TODO: Completely revamp... again.
+
 import Data.Map as Map
+import Control.Monad.State
+import Syntax
 
--- The semantics of Haskell allow for easy recursion on tree data
--- structures; as we traverse the AST we will generate our code in a
--- recursive, top-down manner.
--- Rather than just using a list to represent our final stack of
--- instructions, we will use a state monad that holds a list of blocks
--- and each block will hold a stack of instructions.
--- We will also use the state monad to append instructions to the stack
--- in blocks.
+data Instruction
+  = SeqInstr Instruction Instruction
+  | Label Label
+  | Load Ident Operand
+  | Store Atom Ident
+  | Jmp Label
+  | Call_I Ident Ident [Ident]
+  | Return_I Ident
+  deriving (Show)
 
--- Symbol table mapping identifiers in our AST to variables in our
--- intermediate language.
-type SymbolTable = [(String, String)]
+data Operand
+  = Atom Atom
+  | UnApp_I UnOp_I Atom
+  | BinApp_I BinOp_I Atom Atom
+  | Memory Atom
+  deriving (Show)
 
-data TempVar     = TempVar Int
+data Atom
+  = Var Ident
+  | Int_I Int
+  deriving (Show)
 
-data BlockState
-  = BlockState
-  { stack :: [Instruction] } deriving (Show)
+data UnOp_I = I
 
--- The first (i.e: largest) constituent unit of our intermediate list of
--- instructions will be sections of intermediate code for each of our functions.
--- Since the implementation of functions is independent (which is what allows
--- us to define 'extern' functions), each section of intermediate code for
--- functions can be independently implemented.
+type Label = String
 
+--------------------------------------------------------------------------------
+----------------------------CODE GENERATOR STATE--------------------------------
 data CodegenState
   = CodegenState
-  { currentBlock :: Name -- The block on which we are working.
-  , blocks :: [BlockState] -- The list of blocks in the function scope.
-  , vtable :: SymbolTable
+  { vtable :: SymbolTable
   , ftable :: SymbolTable
-  , tempVar :: TempVar -- The next temporary variable to use.
-  } deriving (Show)
+  , tempVar :: Ident
+  , tempVarCount :: Int
+  , instructions :: Instruction } deriving (Show)
 
-newtype Codegen a = {runCodegen :: State CodegenState a} deriving (Functor, Applicative, Monad, MonadState CodegenState, Show)
+-- Isomorphism between 'Codegen a' and 'State CodegenState a'
+newtype Codegen a = Codegen {runCodegen :: State CodegenState a} deriving (Show)
+
+instance Functor Codegen where
+  fmap f k = k >>= (pure . f)
+
+instance Applicative Codegen where
+  pure    = Codegen . pure
+  j <*> k = j >>= \f ->
+            k >>= (pure . f)
+
+instance Monad Codegen where
+  return   = pure
+  cg >>= f = f . (fst $ \cgst -> runState (runCodegen cg) cgst)
+
+getVar :: Codegen Ident
+getVar = do
+  var <- gets tempVar
+  count <- tempVarCount
+  modify $ \s -> s {tempVarCount = count + 1}
+  return var
