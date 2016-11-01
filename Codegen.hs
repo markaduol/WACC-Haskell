@@ -12,35 +12,28 @@ import Data.Map as Map
 -- in blocks.
 
 -- Symbol table mapping identifiers in our AST to variables in our
--- intermediate language
-type VTable = Map.Map Ident (String, Int)
+-- intermediate language.
+type SymbolTable = [(String, String)]
 
--- Symbol table mapping function identifiers in our AST to variables in
--- our intermediate language
-type FTable = Map.Map Function (String, Int)
-
--- Our name supply for temporary variables
--- Our temporary variables are of the form t0, t1, t2, x1, y3, etc.
-type TempVar = (String, Int)
+data TempVar     = TempVar Int
 
 data BlockState
   = BlockState
   { stack :: [Instruction] } deriving (Show)
 
+-- The first (i.e: largest) constituent unit of our intermediate list of
+-- instructions will be sections of intermediate code for each of our functions.
+-- Since the implementation of functions is independent (which is what allows
+-- us to define 'extern' functions), each section of intermediate code for
+-- functions can be independently implemented.
+
 data CodegenState
   = CodegenState
-  { currentBlock :: BlockState
-  , blocks :: [BlockState]
+  { currentBlock :: Name -- The block on which we are working.
+  , blocks :: [BlockState] -- The list of blocks in the function scope.
+  , vtable :: SymbolTable
+  , ftable :: SymbolTable
+  , tempVar :: TempVar -- The next temporary variable to use.
   } deriving (Show)
 
-newtype Codegen a = {runCodegen :: State CodegenState a} deriving (MonadState)
-
-instance Functor Codegen where
-  fmap f k = k >>= (pure . f)
-
-instance Applicative Codegen where
-  f <*> k = f >>= \a -> fmap a k
-
-instance Monad Codegen where
-  return  = pure
-  k >>= f = get >>= f . (evalState (runCodegen k))
+newtype Codegen a = {runCodegen :: State CodegenState a} deriving (Functor, Applicative, Monad, MonadState CodegenState, Show)
