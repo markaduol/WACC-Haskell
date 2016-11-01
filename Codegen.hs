@@ -1,49 +1,46 @@
 module Codegen where
 
-type Label = String
+import Data.Map as Map
 
-type FTable = [(Function, Label)]
-type VTable = [(Ident, String)]
+-- The semantics of Haskell allow for easy recursion on tree data
+-- structures; as we traverse the AST we will generate our code in a
+-- recursive, top-down manner.
+-- Rather than just using a list to represent our final stack of
+-- instructions, we will use a state monad that holds a list of blocks
+-- and each block will hold a stack of instructions.
+-- We will also use the state monad to append instructions to the stack
+-- in blocks.
+
+-- Symbol table mapping identifiers in our AST to variables in our
+-- intermediate language
+type VTable = Map.Map Ident (String, Int)
+
+-- Symbol table mapping function identifiers in our AST to variables in
+-- our intermediate language
+type FTable = Map.Map Function (String, Int)
+
+-- Our name supply for temporary variables
+-- Our temporary variables are of the form t0, t1, t2, x1, y3, etc.
+type TempVar = (String, Int)
+
+data BlockState
+  = BlockState
+  { stack :: [Instruction] } deriving (Show)
 
 data CodegenState
   = CodegenState
-  { ftable :: FTable -- Symbol table mapping function names to Labels
-  , currentBlock :: BlockState -- Current Block to append to
-  , vtable :: VTable -- Mapping of variable names to temporary code vars
-  }
+  { currentBlock :: BlockState
+  , blocks :: [BlockState]
+  } deriving (Show)
 
-data BlockState
-  = BlockState
-  { stack :: [ICode]
-  , id :: Int -- Id of the block
-  } 
+newtype Codegen a = {runCodegen :: State CodegenState a} deriving (MonadState)
 
-data ICode
-  = Add Operand Operand
-  | Sub Operand Operand
-  | Mul Operand Operand
-  | Div Operand Operand
-  | Load Operand Operand
-  | Store Operand Operand
-  | Push Operand
-  | Pop Operand
-  | Cmp Operand Operand
-  | JGE Label
-  | JLE Label
-  | Jmp Label
+instance Functor Codegen where
+  fmap f k = k >>= (pure . f)
 
-data Operand
-  = ImmConst Int
-  | Reg Int
+instance Applicative Codegen where
+  f <*> k = f >>= \a -> fmap a k
 
-data BlockState
-  = BlockState
-  { stack :: [ICode] } deriving (Show)
-
-transExpr :: Expr -> Operand -> [ICode]
-transExpr (LInt n) place = Load place (ImmConst n)
-
-transOp Add = [Add]
-
-transStat :: Stat -> [ICode]
-transStat (If e st1 st2) =
+instance Monad Codegen where
+  return  = pure
+  k >>= f = get >>= f . (evalState (runCodegen k))
