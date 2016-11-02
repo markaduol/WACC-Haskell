@@ -37,9 +37,11 @@ type Label = String
 
 type Name = String
 
-type SymbolTable = Map.Map Ident Var
+-- We use '[Var]' instead of 'Var' to deal with cases when the same variable is
+-- defined twice (or more) in an outer scope and an inner scope
+type SymbolTable = Map.Map Ident [Var]
 
-data Var = Named Int | UnNamed Int deriving (Show)
+data Var = Named (Ident, Int) | UnNamed Int deriving (Show)
 
 --------------------------------------------------------------------------------
 ------------------------------- CODEGEN STATE ----------------------------------
@@ -96,11 +98,6 @@ createBlock (name, (BlockState _ ins trm)) = BasicBlock name ins (createTrm trm)
       Just x  -> x
       Nothing -> error ("No terminating instruction for block: " ++ (show name))
 
--- Whenever creating the block, we must supply the index to ensure that it
--- occupies the right position within the list of blocks in the function scope
-emptyBlock :: Int -> BlockState
-emptyBlock index = BlockState index [] Nothing
-
 emptyCodegenState :: CodegenState
 emptyCodegenState = CodegenState "entryBlock" Map.empty 0 Map.empty Map.empty 0
 
@@ -115,6 +112,32 @@ getVar = do
   var <- gets tempVarCount
   modify $ \s -> s {tempVarCount = var + 1}
   return (UnNamed var)
+
+addVarIdent :: Ident -> Codegen Ident
+addVarIdent i = do
+  vtab <- gets vtable
+  case Map.lookup i vtab of
+    Just (v:vs) -> let varCount = length (v:vs) in
+                   modify $ \s -> s {vtable = Map.insert i ((v:vs) ++ [(Named (i, varCount))]) (vtable s)}
+    Nothing     -> modify $ \s -> s {vtable = Map.insert i [(Named (i, 0))] (vtable s)}
+  return i
+
+addFuncIdent :: Ident -> Codegen Ident
+addFuncIdent i = do
+  ftab <- gets ftable
+  case Map.lookup i ftab of
+    Just (v:vs) -> let varCount = length (v:vs) in
+                   modify $ \s -> s {ftable = Map.insert i ((v:vs) ++ [(Named (i, varCount))]) (ftable s)}
+    Nothing     -> modify $ \s -> s {ftable = Map.insert i [(Named (i, 0))] (ftable s)}
+  return i
+
+--------------------------------------------------------------------------------
+---------------------------------- BLOCKS --------------------------------------
+
+-- Whenever creating the block, we must supply the index to ensure that it
+-- occupies the right position within the list of blocks in the function scope
+emptyBlock :: Int -> BlockState
+emptyBlock index = BlockState index [] Nothing
 
 currentBlock :: Codegen BlockState
 currentBlock = do
@@ -149,6 +172,9 @@ terminateInstr trm = do
   modifyBlock $ blk {terminator = Just trm}
   return trm
 
+--------------------------------------------------------------------------------
+---------------------------- TRANSLATE EXPRESSIONS -----------------------------
+
 transExprs :: [Expr] -> Codegen [Instruction]
 transExprs [expr] = do
   var <- getVar
@@ -181,8 +207,8 @@ transExpr (Ident ident) var = do
   blk <- currentBlock
   let stk = stack blk
   valSymtab <- gets vtable
-  let a = fromMaybe (Map.lookup ident valSymtab)
-  let instr = Load var (Atom (Var a))
+  let as = fromMaybe (Map.lookup ident valSymtab)
+  let instr = Load var (Atom (Var (last as))) -- We select the last added identifier: i.e, in [a1,...,an] we select 'an'.
   modifyBlock $ blk {stack = stk ++ [instr]}
   return [instr]
   where
