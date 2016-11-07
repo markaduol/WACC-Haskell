@@ -26,4 +26,4 @@ descendExprM :: (Monad m) => (Expr -> m Expr) -> Expr -> m Expr
 descendExprM f ex = case ex of
   BinApp op e1 e2 -> BinApp op <$> descendExprM f e1 <*> descendExprM f e2
   UnApp op e      -> UnApp op <$> descendExprM f e
-  otherwise       -> f e
+  otherwise       -> f ex
