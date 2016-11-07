@@ -68,7 +68,9 @@ data Expr
 
 data UnOp = NOT_ | SignInv | Len | Ord | Chr deriving (Show)
 
-data BinOp = Mul | Div | Mod | Add | Sub | GT_ | GTE_ | LT_ | LTE_ | EQ_ | NEQ_ | AND_ | OR_ deriving (Show)
+data BinOp
+  = Mul | Div | Mod | Add | Sub | GT_ | GTE_ | LT_
+  | LTE_ | EQ_ | NEQ_ | AND_ | OR_ deriving (Show)
 
 --------------------------------------------------------------------------
 --------------------------IN EXPRESSION SYNTAX----------------------------

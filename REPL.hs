@@ -14,6 +14,7 @@ processStat input = do
     Right stmt -> mapM_ print (viewStmt stmt)
 
 -- Unfold and view the statment in a human friendly format
+-- 'st1' is the last statment
 viewStmt :: Stat -> [Stat]
 viewStmt stmt = deconstr stmt []
   where

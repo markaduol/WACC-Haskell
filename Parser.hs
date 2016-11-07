@@ -154,7 +154,7 @@ statSeq_P = do
     -- Using excessively long chains of references to handle
     -- deeply nested expressions would result in stack overflows. So in
     -- order to avoid this behaviour, we use 'seq', which evaluates its
-    -- first argument to Weak Head Normal Form and then returns it second
+    -- first argument to Weak Head Normal Form and then returns its second
     -- argument. If we want to evaluate the first argument to Normal
     -- Form (i.e: complete and utter evaluation), use
     -- Control.DeepSeq.deepseq.
